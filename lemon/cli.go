@@ -24,6 +24,7 @@ type CommandStyle int
 const (
 	ALIAS CommandStyle = iota + 1
 	SUBCOMMAND
+	NULL
 )
 
 type CLI struct {

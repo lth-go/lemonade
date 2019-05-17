@@ -158,7 +158,21 @@ func middleware(next http.Handler) http.Handler {
 	})
 }
 
-func Serve(c *lemon.CLI, _logger log.Logger) error {
+func startServer(c *lemon.CLI) *http.Server {
+	srv := &http.Server{Addr: fmt.Sprintf(":%d", c.Port)}
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil {
+			// cannot panic, because this probably is an intentional close
+			logger.Error("Httpserver: ListenAndServe()", "err", err)
+		}
+	}()
+
+	// returning reference so caller can call Shutdown()
+	return srv
+}
+
+func Serve(c *lemon.CLI, _logger log.Logger) (*http.Server, error) {
 	logger = _logger
 	lineEnding = c.LineEnding
 	port = c.Port
@@ -167,7 +181,7 @@ func Serve(c *lemon.CLI, _logger log.Logger) error {
 	ra, err = iprange.New(c.Allow)
 	if err != nil {
 		logger.Error("allowIp error")
-		return err
+		return nil, err
 	}
 
 	os.MkdirAll(path, os.ModePerm)
@@ -176,9 +190,7 @@ func Serve(c *lemon.CLI, _logger log.Logger) error {
 	http.Handle("/paste", middleware(http.HandlerFunc(handlePaste)))
 	http.Handle("/open", middleware(http.HandlerFunc(handleOpen)))
 	http.Handle("/upload", middleware(http.HandlerFunc(handleUpload)))
-	err = http.ListenAndServe(fmt.Sprintf(":%d", c.Port), nil)
-	if err != nil {
-		return err
-	}
-	return nil
+
+	srv := startServer(c)
+	return srv, nil
 }

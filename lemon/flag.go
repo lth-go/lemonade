@@ -2,7 +2,6 @@ package lemon
 
 import (
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"regexp"
 
@@ -11,10 +10,7 @@ import (
 )
 
 func (c *CLI) FlagParse(args []string, skip bool) error {
-	style, err := c.getCommandType(args)
-	if err != nil {
-		return err
-	}
+	style := c.getCommandType(args)
 	if style == SUBCOMMAND {
 		args = args[:len(args)-1]
 	}
@@ -22,7 +18,7 @@ func (c *CLI) FlagParse(args []string, skip bool) error {
 	return c.parse(args, skip)
 }
 
-func (c *CLI) getCommandType(args []string) (s CommandStyle, err error) {
+func (c *CLI) getCommandType(args []string) (s CommandStyle) {
 	s = ALIAS
 	switch {
 	case regexp.MustCompile(`/?xdg-open$`).MatchString(args[0]):
@@ -63,7 +59,8 @@ func (c *CLI) getCommandType(args []string) (s CommandStyle, err error) {
 		}
 	}
 
-	return s, fmt.Errorf("Unknown SubCommand\n\n" + Usage)
+	s = NULL
+	return s
 }
 
 func (c *CLI) flags() *flag.FlagSet {
@@ -88,6 +85,10 @@ func (c *CLI) parse(args []string, skip bool) error {
 		if confArgs, err := conflag.ArgsFrom(confPath); err == nil {
 			flags.Parse(confArgs)
 		}
+	}
+
+	if len(args) == 1 {
+		return nil
 	}
 
 	var arg string

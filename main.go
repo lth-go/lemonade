@@ -2,10 +2,16 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
+	"path"
+	"runtime"
 
 	log "github.com/inconshreveable/log15"
 
+	"github.com/ProtonMail/go-autostart"
+	"github.com/getlantern/systray"
+	"github.com/getlantern/systray/example/icon"
 	"github.com/lemonade-command/lemonade/client"
 	"github.com/lemonade-command/lemonade/lemon"
 	"github.com/lemonade-command/lemonade/server"
@@ -19,60 +25,143 @@ var logLevelMap = map[int]log.Lvl{
 	4: log.LvlCrit,
 }
 
-func main() {
+var srv *http.Server
+var cli *lemon.CLI
+var logger log.Logger
 
-	cli := &lemon.CLI{
+func getBinPath() string {
+	e, err := os.Executable()
+	if err != nil {
+		panic(err)
+	}
+	path := path.Dir(e)
+	return path
+}
+
+func onReady() {
+	systray.SetIcon(icon.Data)
+	systray.SetTitle("lemonade")
+	tips := fmt.Sprintf("lemonade running.\nport:%d\nallow:'%s'", cli.Port, cli.Allow)
+	systray.SetTooltip(tips)
+
+	if runtime.GOOS == "windows" {
+		mChecked := systray.AddMenuItem("Auto Startup", "Auto Startup lemonade on boot")
+
+		dir, err := os.Getwd()
+		app := &autostart.App{
+			Name:        "lemonade",
+			DisplayName: "lemonade",
+			Exec:        []string{getBinPath()},
+		}
+		if app.IsEnabled() {
+			mChecked.Check()
+		}
+
+		go func() {
+			for {
+				select {
+				case <-mChecked.ClickedCh:
+					if mChecked.Checked() {
+						if err := app.Disable(); err != nil {
+							logger.Error("Disable Autostart Failed.", "err", err)
+						} else {
+							mChecked.Uncheck()
+						}
+					} else {
+						if err := app.Enable(); err != nil {
+							logger.Error("Enable Autostart Failed.", "err", err)
+						} else {
+							mChecked.Check()
+						}
+					}
+				}
+			}
+		}()
+	}
+
+	mQuit := systray.AddMenuItem("Quit", "Quit lemonade")
+	go func() {
+		<-mQuit.ClickedCh
+		systray.Quit()
+	}()
+
+	go startServer()
+}
+
+func onExit() {
+	// clean up here
+	stopServer()
+}
+
+func startServer() {
+	logger.Debug("Starting Server")
+	var err error
+	srv, err = server.Serve(cli, logger)
+	if err != nil {
+		logger.Error("StartServer", "err", err)
+	}
+}
+
+func stopServer() {
+	if srv == nil {
+		logger.Error("Server not running")
+		return
+	}
+	if err := srv.Shutdown(nil); err != nil {
+		panic(err) // failure/timeout shutting down the server gracefully
+	}
+	logger.Error("Server stoped.")
+	srv = nil
+}
+
+func main() {
+	cli = &lemon.CLI{
 		In:  os.Stdin,
 		Out: os.Stdout,
 		Err: os.Stderr,
 	}
-	os.Exit(Do(cli, os.Args))
-}
-
-func Do(c *lemon.CLI, args []string) int {
-	logger := log.New()
-	logger.SetHandler(log.LvlFilterHandler(log.LvlError, log.StdoutHandler))
-
-	if err := c.FlagParse(args, false); err != nil {
-		writeError(c, err)
-		return lemon.FlagParseError
+	var err error
+	if err = cli.FlagParse(os.Args, false); err != nil {
+		writeError(cli, err)
+		os.Exit(lemon.FlagParseError)
 	}
 
-	logLevel := logLevelMap[c.LogLevel]
+	logger = log.New()
+	logLevel := logLevelMap[cli.LogLevel]
 	logger.SetHandler(log.LvlFilterHandler(logLevel, log.StdoutHandler))
 
-	if c.Help {
-		fmt.Fprint(c.Err, lemon.Usage)
-		return lemon.Help
+	if len(os.Args) == 1 {
+		fmt.Fprintln(cli.Err, lemon.Usage)
+		systray.Run(onReady, onExit)
+	} else {
+		if cli.Type == lemon.SERVER {
+			startServer()
+		} else {
+			lc := client.New(cli, logger)
+			switch cli.Type {
+			case lemon.OPEN:
+				logger.Debug("Opening URL")
+				err = lc.Open(cli.DataSource, cli.TransLocalfile, cli.TransLoopback)
+			case lemon.COPY:
+				logger.Debug("Copying text")
+				err = lc.Copy(cli.DataSource)
+			case lemon.PASTE:
+				logger.Debug("Pasting text")
+				var text string
+				text, err = lc.Paste()
+				cli.Out.Write([]byte(text))
+			}
+			if err != nil {
+				writeError(cli, err)
+				os.Exit(lemon.RPCError)
+			}
+		}
 	}
 
-	lc := client.New(c, logger)
-	var err error
-
-	switch c.Type {
-	case lemon.OPEN:
-		logger.Debug("Opening URL")
-		err = lc.Open(c.DataSource, c.TransLocalfile, c.TransLoopback)
-	case lemon.COPY:
-		logger.Debug("Copying text")
-		err = lc.Copy(c.DataSource)
-	case lemon.PASTE:
-		logger.Debug("Pasting text")
-		var text string
-		text, err = lc.Paste()
-		c.Out.Write([]byte(text))
-	case lemon.SERVER:
-		logger.Debug("Starting Server")
-		err = server.Serve(c, logger)
-	default:
-		panic("Unreachable code")
+	if cli.Help {
+		fmt.Fprintln(cli.Err, lemon.Usage)
+		os.Exit(lemon.Help)
 	}
-
-	if err != nil {
-		writeError(c, err)
-		return lemon.RPCError
-	}
-	return lemon.Success
 }
 
 func writeError(c *lemon.CLI, err error) {
