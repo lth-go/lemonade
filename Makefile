@@ -1,4 +1,4 @@
-VERSION=$(shell git describe --gags)
+VERSION=$(shell git describe --tags)
 
 build:
 	go build -ldflags "-X github.com/lemonade-command/lemonade/lemon.Version=$(VERSION)"
