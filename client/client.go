@@ -14,7 +14,7 @@ import (
 
 	"github.com/atotto/clipboard"
 	log "github.com/inconshreveable/log15"
-	"github.com/lemonade-command/lemonade/lemon"
+	"github.com/hanxi/lemonade/lemon"
 )
 
 type client struct {
@@ -53,6 +53,10 @@ func (c *client) Paste() (string, error) {
 	r, err := http.Get(url)
 	if err != nil {
 		c.logger.Error("http error.", "err", err.Error())
+		t, err := clipboard.ReadAll()
+		if err == nil {
+			return t, nil
+		}
 		return "", err
 	}
 

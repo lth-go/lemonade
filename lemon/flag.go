@@ -4,10 +4,15 @@ import (
 	"flag"
 	"io/ioutil"
 	"regexp"
+	"os"
+	"path/filepath"
+	"runtime"
 
 	"github.com/mitchellh/go-homedir"
 	"github.com/monochromegane/conflag"
 )
+
+var confFile = "~/.config/lemonade.toml"
 
 func (c *CLI) FlagParse(args []string, skip bool) error {
 	style := c.getCommandType(args)
@@ -77,10 +82,33 @@ func (c *CLI) flags() *flag.FlagSet {
 	return flags
 }
 
+func (c *CLI) GetConfPath() (string, error) {
+	confPath, err := homedir.Expand(confFile)
+	if err != nil {
+		return confPath, err
+	}
+
+	file,err := os.Open(confPath)
+	defer func() {
+		file.Close()
+	}()
+
+	if os.IsNotExist(err) {
+		os.MkdirAll(filepath.Dir(confPath), os.ModePerm)
+		s := "#port=2489\n#host=127.0.0.1\n#line-ending='lf'"
+		if runtime.GOOS == "windows" {
+			s = ConvertLineEnding(s, "CRLF")
+		}
+		ioutil.WriteFile(confPath, []byte(s), os.ModePerm)
+	}
+
+	return confPath, nil
+}
+
 func (c *CLI) parse(args []string, skip bool) error {
 	flags := c.flags()
 
-	confPath, err := homedir.Expand("~/.config/lemonade.toml")
+	confPath, err := c.GetConfPath()
 	if err == nil && !skip {
 		if confArgs, err := conflag.ArgsFrom(confPath); err == nil {
 			flags.Parse(confArgs)

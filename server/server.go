@@ -9,10 +9,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
+	"path/filepath"
 
 	"github.com/atotto/clipboard"
 	log "github.com/inconshreveable/log15"
-	"github.com/lemonade-command/lemonade/lemon"
+	"github.com/hanxi/lemonade/lemon"
 	"github.com/pocke/go-iprange"
 	"github.com/skratchdot/open-golang/open"
 )
@@ -21,7 +23,7 @@ var logger log.Logger
 var lineEnding string
 var ra *iprange.Range
 var port int
-var path = "./files"
+var filesPath = "./files"
 
 func handleCopy(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -126,7 +128,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ioutil.WriteFile(path+"/"+handler.Filename, fileBytes, os.ModePerm)
+	ioutil.WriteFile(filesPath+"/"+handler.Filename, fileBytes, os.ModePerm)
 
 	q := r.URL.Query()
 	isOpen := q.Get("open")
@@ -184,8 +186,12 @@ func Serve(c *lemon.CLI, _logger log.Logger) (*http.Server, error) {
 		return nil, err
 	}
 
-	os.MkdirAll(path, os.ModePerm)
-	http.Handle("/files/", http.StripPrefix("/files/", http.FileServer(http.Dir(path))))
+	filedirectory := filepath.Dir(os.Args[0])
+	fpath, _ := filepath.Abs(filedirectory)
+	filesPath = path.Join(fpath, "/files")
+
+	os.MkdirAll(filesPath, os.ModePerm)
+	http.Handle("/files/", http.StripPrefix("/files/", http.FileServer(http.Dir(filesPath))))
 	http.Handle("/copy", middleware(http.HandlerFunc(handleCopy)))
 	http.Handle("/paste", middleware(http.HandlerFunc(handlePaste)))
 	http.Handle("/open", middleware(http.HandlerFunc(handleOpen)))

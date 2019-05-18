@@ -5,16 +5,16 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"runtime"
 
 	log "github.com/inconshreveable/log15"
 
 	"github.com/ProtonMail/go-autostart"
 	"github.com/getlantern/systray"
-	"github.com/getlantern/systray/example/icon"
-	"github.com/lemonade-command/lemonade/client"
-	"github.com/lemonade-command/lemonade/lemon"
-	"github.com/lemonade-command/lemonade/server"
+	"github.com/hanxi/lemonade/icon"
+	"github.com/hanxi/lemonade/client"
+	"github.com/hanxi/lemonade/lemon"
+	"github.com/hanxi/lemonade/server"
+	"github.com/skratchdot/open-golang/open"
 )
 
 var logLevelMap = map[int]log.Lvl{
@@ -44,40 +44,47 @@ func onReady() {
 	tips := fmt.Sprintf("lemonade running.\nport:%d\nallow:'%s'", cli.Port, cli.Allow)
 	systray.SetTooltip(tips)
 
-	if runtime.GOOS == "windows" {
-		mChecked := systray.AddMenuItem("Auto Startup", "Auto Startup lemonade on boot")
+	mChecked := systray.AddMenuItem("Auto Startup", "Auto Startup lemonade on boot")
+	filename := os.Args[0] // get command line first parameter
+	app := &autostart.App{
+		Name:        "lemonade",
+		DisplayName: "lemonade",
+		Exec:        []string{filename},
+	}
+	if app.IsEnabled() {
+		mChecked.Check()
+	}
 
-		dir, err := os.Getwd()
-		app := &autostart.App{
-			Name:        "lemonade",
-			DisplayName: "lemonade",
-			Exec:        []string{getBinPath()},
-		}
-		if app.IsEnabled() {
-			mChecked.Check()
-		}
+    mOpenConfig := systray.AddMenuItem("OpenConfig", "Open lemonade Config file")
 
-		go func() {
-			for {
-				select {
-				case <-mChecked.ClickedCh:
-					if mChecked.Checked() {
-						if err := app.Disable(); err != nil {
-							logger.Error("Disable Autostart Failed.", "err", err)
-						} else {
-							mChecked.Uncheck()
-						}
+	go func() {
+		for {
+			select {
+			case <-mChecked.ClickedCh:
+				if mChecked.Checked() {
+					if err := app.Disable(); err != nil {
+						logger.Error("Disable Autostart Failed.", "err", err)
 					} else {
-						if err := app.Enable(); err != nil {
-							logger.Error("Enable Autostart Failed.", "err", err)
-						} else {
-							mChecked.Check()
-						}
+						mChecked.Uncheck()
+					}
+				} else {
+					if err := app.Enable(); err != nil {
+						logger.Error("Enable Autostart Failed.", "err", err)
+					} else {
+						mChecked.Check()
+					}
+				}
+			case <-mOpenConfig.ClickedCh:
+				{
+					confPath, err := cli.GetConfPath()
+					if err == nil {
+						logger.Error("conf file path", "confPath", confPath)
+						open.Run(confPath)
 					}
 				}
 			}
-		}()
-	}
+		}
+	}()
 
 	mQuit := systray.AddMenuItem("Quit", "Quit lemonade")
 	go func() {
