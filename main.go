@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 
 	"github.com/ProtonMail/go-autostart"
 	"github.com/getlantern/systray"
@@ -78,7 +79,7 @@ func onReady() {
 					confPath, err := cli.GetConfPath()
 					if err == nil {
 						logger.Error("conf file path", "confPath", confPath)
-						open.Run(confPath)
+						open.Run(filepath.Dir(confPath))
 					}
 				}
 			}
