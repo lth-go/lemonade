@@ -6,14 +6,13 @@ import (
 	"os"
 	"path"
 
-	log "github.com/inconshreveable/log15"
-
 	"github.com/ProtonMail/go-autostart"
 	"github.com/getlantern/systray"
-	"github.com/hanxi/lemonade/icon"
 	"github.com/hanxi/lemonade/client"
+	"github.com/hanxi/lemonade/icon"
 	"github.com/hanxi/lemonade/lemon"
 	"github.com/hanxi/lemonade/server"
+	log "github.com/inconshreveable/log15"
 	"github.com/skratchdot/open-golang/open"
 )
 
@@ -55,7 +54,7 @@ func onReady() {
 		mChecked.Check()
 	}
 
-    mOpenConfig := systray.AddMenuItem("OpenConfig", "Open lemonade Config file")
+	mOpenConfig := systray.AddMenuItem("OpenConfig", "Open lemonade Config file")
 
 	go func() {
 		for {

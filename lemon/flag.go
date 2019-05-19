@@ -3,9 +3,9 @@ package lemon
 import (
 	"flag"
 	"io/ioutil"
-	"regexp"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 
 	"github.com/mitchellh/go-homedir"
@@ -88,16 +88,16 @@ func (c *CLI) GetConfPath() (string, error) {
 		return confPath, err
 	}
 
-	file,err := os.Open(confPath)
+	file, err := os.Open(confPath)
 	defer func() {
 		file.Close()
 	}()
 
 	if os.IsNotExist(err) {
 		os.MkdirAll(filepath.Dir(confPath), os.ModePerm)
-		s := "#port=2489\n#host=127.0.0.1\n#line-ending='lf'"
+		s := "#port=2489\n#allow=\"127.0.0.1,::1\"\n#line-ending=\"lf\""
 		if runtime.GOOS == "windows" {
-			s = ConvertLineEnding(s, "CRLF")
+			s = "#port=2489\r\n#allow=\"127.0.0.1,::1\"\r\n#line-ending=\"crlf\""
 		}
 		ioutil.WriteFile(confPath, []byte(s), os.ModePerm)
 	}
