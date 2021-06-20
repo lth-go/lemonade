@@ -4,7 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"regexp"
+	"strings"
 
 	"github.com/mitchellh/go-homedir"
 	"github.com/monochromegane/conflag"
@@ -70,7 +72,7 @@ func (c *CLI) flags() *flag.FlagSet {
 	flags := flag.NewFlagSet("lemonade", flag.ContinueOnError)
 	flags.IntVar(&c.Port, "port", 2489, "TCP port number")
 	flags.StringVar(&c.Allow, "allow", "0.0.0.0/0,::/0", "Allow IP range")
-	flags.StringVar(&c.Host, "host", "localhost", "Destination host name.")
+	flags.StringVar(&c.Host, "host", "", "Destination host name.")
 	flags.BoolVar(&c.Help, "help", false, "Show this message")
 	flags.BoolVar(&c.TransLoopback, "trans-loopback", true, "Translate loopback address")
 	flags.BoolVar(&c.TransLocalfile, "trans-localfile", true, "Translate local file")
@@ -87,6 +89,14 @@ func (c *CLI) parse(args []string, skip bool) error {
 	if err == nil && !skip {
 		if confArgs, err := conflag.ArgsFrom(confPath); err == nil {
 			flags.Parse(confArgs)
+		}
+	}
+
+	// use env SSH_CLIENT
+	if c.Host == "" {
+		ssh_client := os.Getenv("SSH_CLIENT")
+		if ssh_client != "" {
+			c.Host = strings.Split(ssh_client, " ")[0]
 		}
 	}
 
