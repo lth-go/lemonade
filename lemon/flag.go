@@ -94,9 +94,13 @@ func (c *CLI) parse(args []string, skip bool) error {
 
 	// use env SSH_CLIENT
 	if c.Host == "" {
-		ssh_client := os.Getenv("SSH_CLIENT")
-		if ssh_client != "" {
-			c.Host = strings.Split(ssh_client, " ")[0]
+		sshClient := os.Getenv("SSH_CLIENT")
+		wslHost := os.Getenv("WSL_HOST")
+
+		if sshClient != "" {
+			c.Host = strings.Split(sshClient, " ")[0]
+		} else if wslHost != "" {
+			c.Host = wslHost
 		}
 	}
 
