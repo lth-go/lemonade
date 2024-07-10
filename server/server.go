@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -17,41 +16,59 @@ import (
 	"github.com/skratchdot/open-golang/open"
 )
 
-var logger log.Logger
-var lineEnding string
-var ra *iprange.Range
-var port int
-var path = "./files"
+var (
+	logger     log.Logger
+	lineEnding string
+	ra         *iprange.Range
+	port       int
+	path       = "./files"
+)
 
 func handleCopy(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
 	if r.Method != http.MethodPost {
-		http.Error(w, "Copy only support post", 404)
+		http.Error(w, "Copy only support post", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Read body
-	b, err := ioutil.ReadAll(r.Body)
-	defer r.Body.Close()
+	buf, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		logger.Error("io.ReadAll error", "err", err.Error())
+
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	text := lemon.ConvertLineEnding(string(b), lineEnding)
+
+	text := lemon.ConvertLineEnding(string(buf), lineEnding)
+
 	logger.Debug("Copy:", "text", text)
-	clipboard.WriteAll(text)
+
+	err = clipboard.WriteAll(text)
+	if err != nil {
+		logger.Error("clipboard.WriteAll error", "err", err.Error())
+	}
 }
 
 func handlePaste(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Paste only support get", 404)
+		http.Error(w, "Paste only support get", http.StatusMethodNotAllowed)
 		return
 	}
 
-	t, err := clipboard.ReadAll()
-	if err == nil {
-		io.WriteString(w, t)
+	text, err := clipboard.ReadAll()
+	if err != nil {
+		logger.Error("clipboard.ReadAll error", "err", err.Error())
+		return
 	}
-	logger.Debug("Paste: ", "text", t)
+
+	_, err = io.WriteString(w, text)
+	if err != nil {
+		logger.Error("io.WriteString error", "err", err.Error())
+		return
+	}
+
+	logger.Debug("Paste: ", "text", text)
 }
 
 func translateLoopbackIP(uri string, remoteIP string) string {
@@ -61,6 +78,9 @@ func translateLoopbackIP(uri string, remoteIP string) string {
 	}
 
 	host, port, err := net.SplitHostPort(parsed.Host)
+	if err != nil {
+		return uri
+	}
 
 	ip := net.ParseIP(host)
 	if ip == nil || !ip.IsLoopback() {
@@ -78,7 +98,7 @@ func translateLoopbackIP(uri string, remoteIP string) string {
 
 func handleOpen(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Open only support get", 404)
+		http.Error(w, "Open only support get", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -106,7 +126,7 @@ func handleOpen(w http.ResponseWriter, r *http.Request) {
 
 func handleUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Upload only support post", 404)
+		http.Error(w, "Upload only support post", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -119,14 +139,14 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	fileBytes, err := ioutil.ReadAll(file)
+	fileBytes, err := io.ReadAll(file)
 	if err != nil {
 		http.Error(w, "Error Read the File", 500)
 		logger.Error("Error Read the File", "err", err)
 		return
 	}
 
-	ioutil.WriteFile(path+"/"+handler.Filename, fileBytes, os.ModePerm)
+	os.WriteFile(path+"/"+handler.Filename, fileBytes, os.ModePerm)
 
 	q := r.URL.Query()
 	isOpen := q.Get("open")
@@ -140,7 +160,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 func middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodPost {
-			http.Error(w, "Not support method.", 404)
+			http.Error(w, "Not support method.", http.StatusMethodNotAllowed)
 			return
 		}
 
@@ -150,10 +170,11 @@ func middleware(next http.Handler) http.Handler {
 			return
 		}
 		if !ra.IncludeStr(remoteIP) {
-			http.Error(w, "Not allow ip.", 503)
+			http.Error(w, "Not allow ip.", http.StatusServiceUnavailable)
 			logger.Info("not in allow ip. from: ", remoteIP)
 			return
 		}
+
 		next.ServeHTTP(w, r)
 	})
 }
@@ -171,14 +192,17 @@ func Serve(c *lemon.CLI, _logger log.Logger) error {
 	}
 
 	os.MkdirAll(path, os.ModePerm)
+
 	http.Handle("/files/", http.StripPrefix("/files/", http.FileServer(http.Dir(path))))
 	http.Handle("/copy", middleware(http.HandlerFunc(handleCopy)))
 	http.Handle("/paste", middleware(http.HandlerFunc(handlePaste)))
 	http.Handle("/open", middleware(http.HandlerFunc(handleOpen)))
 	http.Handle("/upload", middleware(http.HandlerFunc(handleUpload)))
+
 	err = http.ListenAndServe(fmt.Sprintf(":%d", c.Port), nil)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }

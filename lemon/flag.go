@@ -3,7 +3,7 @@ package lemon
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"regexp"
 	"strings"
@@ -129,7 +129,7 @@ func (c *CLI) parse(args []string, skip bool) error {
 	if arg != "" {
 		c.DataSource = arg
 	} else {
-		b, err := ioutil.ReadAll(c.In)
+		b, err := io.ReadAll(c.In)
 		if err != nil {
 			return err
 		}

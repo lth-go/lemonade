@@ -6,8 +6,9 @@ import (
 	"strings"
 )
 
-var Version string
-var Usage = fmt.Sprintf(`Usage: lemonade [options]... SUB_COMMAND [arg]
+var (
+	Version string
+	Usage   = fmt.Sprintf(`Usage: lemonade [options]... SUB_COMMAND [arg]
 Sub Commands:
   open [URL]                  Open URL by browser
   copy [text]                 Copy text.
@@ -28,12 +29,13 @@ Options:
 
 Version:
   %s`, Version)
+)
 
 func ConvertLineEnding(text, option string) string {
 	switch option {
 	case "lf", "LF":
-		text = strings.Replace(text, "\r\n", "\n", -1)
-		return strings.Replace(text, "\r", "\n", -1)
+		text = strings.ReplaceAll(text, "\r\n", "\n")
+		return strings.ReplaceAll(text, "\r", "\n")
 	case "crlf", "CRLF":
 		text = regexp.MustCompile(`\r(.)|\r$`).ReplaceAllString(text, "\r\n$1")
 		text = regexp.MustCompile(`([^\r])\n|^\n`).ReplaceAllString(text, "$1\r\n")

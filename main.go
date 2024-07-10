@@ -20,12 +20,12 @@ var logLevelMap = map[int]log.Lvl{
 }
 
 func main() {
-
 	cli := &lemon.CLI{
 		In:  os.Stdin,
 		Out: os.Stdout,
 		Err: os.Stderr,
 	}
+
 	os.Exit(Do(cli, os.Args))
 }
 
@@ -33,7 +33,8 @@ func Do(c *lemon.CLI, args []string) int {
 	logger := log.New()
 	logger.SetHandler(log.LvlFilterHandler(log.LvlError, log.StdoutHandler))
 
-	if err := c.FlagParse(args, false); err != nil {
+	err := c.FlagParse(args, false)
+	if err != nil {
 		writeError(c, err)
 		return lemon.FlagParseError
 	}
@@ -47,7 +48,6 @@ func Do(c *lemon.CLI, args []string) int {
 	}
 
 	lc := client.New(c, logger)
-	var err error
 
 	switch c.Type {
 	case lemon.OPEN:

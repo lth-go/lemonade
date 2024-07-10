@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -39,31 +38,37 @@ func New(c *lemon.CLI, logger log.Logger) *client {
 
 func (c *client) Copy(text string) error {
 	c.logger.Debug("Sending: " + text)
+
 	url := fmt.Sprintf("%s/copy", c.addr)
+
 	_, err := http.Post(url, "text/plain", strings.NewReader(text))
 	if err != nil {
 		clipboard.WriteAll(text)
 		return err
 	}
+
 	return nil
 }
 
 func (c *client) Paste() (string, error) {
 	url := fmt.Sprintf("%s/paste", c.addr)
-	r, err := http.Get(url)
+
+	resp, err := http.Get(url)
 	if err != nil {
 		c.logger.Error("http error.", "err", err.Error())
 		return "", err
 	}
+	defer resp.Body.Close()
 
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	buf, err := io.ReadAll(resp.Body)
 	if err != nil {
 		c.logger.Error("http read body error.", "err", err.Error())
 		return "", err
 	}
 
-	return lemon.ConvertLineEnding(string(body), c.lineEnding), nil
+	text := lemon.ConvertLineEnding(string(buf), c.lineEnding)
+
+	return text, nil
 }
 
 func fileExists(fname string) bool {
@@ -86,6 +91,7 @@ func (c *client) postFile(name string, url string) (*http.Response, error) {
 		c.logger.Error("cant Opening file", "name", name)
 		return nil, err
 	}
+	defer file.Close()
 
 	_, err = io.Copy(fileWriter, file)
 	if err != nil {
@@ -94,15 +100,18 @@ func (c *client) postFile(name string, url string) (*http.Response, error) {
 
 	contentType := bodyWriter.FormDataContentType()
 	bodyWriter.Close()
+
 	return http.Post(url, contentType, bodyBuf)
 }
 
 func (c *client) uploadFile(name string) error {
 	url := fmt.Sprintf("%s/upload?open=true", c.addr)
+
 	_, err := c.postFile(name, url)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -119,5 +128,6 @@ func (c *client) Open(uri string, transLocalfile bool, transLoopback bool) error
 		c.logger.Error("http error.", "err", err.Error())
 		return err
 	}
+
 	return nil
 }
