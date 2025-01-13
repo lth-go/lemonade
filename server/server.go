@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sync"
 
 	"github.com/atotto/clipboard"
 	log "github.com/inconshreveable/log15"
@@ -22,6 +23,7 @@ var (
 	ra         *iprange.Range
 	port       int
 	path       = "./files"
+	apiLock    sync.Mutex
 )
 
 func handleCopy(w http.ResponseWriter, r *http.Request) {
@@ -44,6 +46,9 @@ func handleCopy(w http.ResponseWriter, r *http.Request) {
 
 	logger.Debug("Copy:", "text", text)
 
+	apiLock.Lock()
+	defer apiLock.Unlock()
+
 	err = clipboard.WriteAll(text)
 	if err != nil {
 		logger.Error("clipboard.WriteAll error", "err", err.Error())
@@ -55,6 +60,9 @@ func handlePaste(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Paste only support get", http.StatusMethodNotAllowed)
 		return
 	}
+
+	apiLock.Lock()
+	defer apiLock.Unlock()
 
 	text, err := clipboard.ReadAll()
 	if err != nil {
