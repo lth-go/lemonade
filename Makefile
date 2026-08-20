@@ -1,16 +1,29 @@
-VERSION=$(shell git describe --tags)
+VERSION=$(shell git describe --tags 2>/dev/null || echo dev)
+
+GOFLAGS := -trimpath
+LDFLAGS := -s -w
 
 build:
-	go build -ldflags "-X github.com/lemonade-command/lemonade/lemon.Version=$(VERSION)"
+	go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o ./bin/lemonade .
 
 install:
-	go install -ldflags "-X github.com/lemonade-command/lemonade/lemon.Version=$(VERSION)"
+	go install .
+
+test:
+	go test -race ./...
+
+vet:
+	go vet ./...
+
+fmt:
+	gofmt -s -w .
+	goimports -w .
 
 release:
-	gox --arch 'amd64' --os 'windows linux' --output "dist/{{.Dir}}_{{.OS}}_{{.Arch}}/{{.Dir}}" -ldflags "-s -w -X github.com/lemonade-command/lemonade/lemon.Version=$(VERSION)"
-	zip      pkg/lemonade_windows_amd64.zip   dist/lemonade_windows_amd64/lemonade.exe -j
-	tar zcvf pkg/lemonade_linux_amd64.tar.gz  -C dist/lemonade_linux_amd64/  lemonade
+	@command -v gox >/dev/null 2>&1 || { echo "gox is required: go install github.com/mitchellh/gox@latest"; exit 1; }
+	gox --arch 'amd64' --os 'windows linux' --output "dist/{{.Dir}}_{{.OS}}_{{.Arch}}/{{.Dir}}" -ldflags "$(LDFLAGS)"
 
 clean:
-	rm -rf dist/
-	rm -f pkg/*.tar.gz pkg/*.zip
+	rm -rf dist/ bin/
+
+.PHONY: build install test vet fmt release clean
